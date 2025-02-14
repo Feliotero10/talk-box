@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Botonera Banco Ciudad</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .navbar {
+            background-color: #333;
+            overflow: hidden;
+        }
+        .navbar a {
+            float: left;
+            display: block;
+            color: #f2f2f2;
+            text-align: center;
+            padding: 14px 20px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .navbar a:hover {
+            background-color: #ddd;
+            color: black;
+        }
+        .content {
+            display: none;
+            padding: 20px;
+        }
+        .button-container {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .record-button {
+            padding: 10px 20px;
+            background-color: #008cba;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .control-buttons {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        .control-button {
+            padding: 5px 10px;
+            background-color: #f4f4f4;
+            color: black;
+            border: 1px solid #ccc;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        audio {
+            display: block;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <a onclick="showTab('inicio')">Inicio</a>
+        <a onclick="showTab('config')">Configuración</a>
+    </div>
+    <div class="content" id="inicio">
+        <h1>Botonera Banco Ciudad</h1>
+        <p>Haz clic en los botones para reproducir los audios.</p>
+        <div class="button-container" id="inicio-buttons"></div>
+        <audio id="audioPlayback" controls></audio>
+    </div>
+    <div class="content" id="config">
+        <h1>Configuración de Audios</h1>
+        <p>Aquí puedes grabar y personalizar los audios.</p>
+        <button onclick="addNewButton()">+</button>
+        <div class="button-container" id="config-buttons"></div>
+    </div>
+    <script>
+        let buttonCount = 4;
+        let recorders = {};
+        let audioBlobs = {};
+        let mediaStreams = {};
+        let playingAudio = null;
+        let buttonNames = {};
+
+        function showTab(tabId) {
+            document.querySelectorAll('.content').forEach(tab => tab.style.display = 'none');
+            document.getElementById(tabId).style.display = 'block';
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            showTab('inicio');
+            generateButtons();
+        });
+
+        function generateButtons() {
+            generateInicioButtons();
+            generateConfigButtons();
+        }
+
+        function generateInicioButtons() {
+            const inicioButtons = document.getElementById('inicio-buttons');
+            inicioButtons.innerHTML = '';
+            for (let i = 1; i <= buttonCount; i++) {
+                const buttonName = buttonNames[i] || `Botón ${i}`;
+                const newButton = document.createElement('button');
+                newButton.classList.add('record-button');
+                newButton.textContent = buttonName;
+                newButton.onclick = () => toggleAudio(i);
+                inicioButtons.appendChild(newButton);
+            }
+        }
+
+        function generateConfigButtons() {
+            const configButtons = document.getElementById('config-buttons');
+            configButtons.innerHTML = '';
+            for (let i = 1; i <= buttonCount; i++) {
+                const buttonName = buttonNames[i] || `Botón ${i}`;
+                const buttonContainer = document.createElement('div');
+                buttonContainer.classList.add('record-button');
+                buttonContainer.dataset.index = i;
+                
+                buttonContainer.innerHTML = `
+                    <input type="text" value="${buttonName}" onchange="renameButton(this, ${i})">
+                    <div class="control-buttons">
+                        <button class="control-button" onclick="startRecording(${i})">Grabar</button>
+                        <button class="control-button" onclick="stopRecording(${i})" id="stop-${i}" disabled>Detener</button>
+                        <button class="control-button" onclick="playAudio(${i})">Reproducir</button>
+                        <button class="control-button" onclick="deleteAudio(${i})">Eliminar</button>
+                    </div>
+                `;
+                configButtons.appendChild(buttonContainer);
+            }
+        }
+
+        function toggleAudio(index) {
+            const audioElement = document.getElementById('audioPlayback');
+            if (playingAudio === index) {
+                audioElement.pause();
+                playingAudio = null;
+            } else {
+                playAudio(index);
+                playingAudio = index;
+            }
+        }
+
+        function startRecording(index) {
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                mediaStreams[index] = stream;
+                recorders[index] = new MediaRecorder(stream);
+                let chunks = [];
+                recorders[index].ondataavailable = event => chunks.push(event.data);
+                recorders[index].onstop = () => {
+                    audioBlobs[index] = new Blob(chunks, { type: 'audio/wav' });
+                };
+                recorders[index].start();
+                document.getElementById(`stop-${index}`).disabled = false;
+            }).catch(error => {
+                alert("Error al acceder al micrófono");
+                console.error(error);
+            });
+        }
+
+        function stopRecording(index) {
+            if (recorders[index]) {
+                recorders[index].stop();
+                mediaStreams[index].getTracks().forEach(track => track.stop());
+                document.getElementById(`stop-${index}`).disabled = true;
+            }
+        }
+
+        function playAudio(index) {
+            if (audioBlobs[index]) {
+                const audioURL = URL.createObjectURL(audioBlobs[index]);
+                document.getElementById('audioPlayback').src = audioURL;
+                document.getElementById('audioPlayback').play();
+            } else {
+                alert("No hay grabación");
+            }
+        }
+
+        function deleteAudio(index) {
+            delete audioBlobs[index];
+            alert("Audio eliminado");
+        }
+
+        function renameButton(input, index) {
+            buttonNames[index] = input.value;
+            generateInicioButtons();
+        }
+
+        function addNewButton() {
+            buttonCount++;
+            generateButtons();
+        }
+    </script>
+</body>
+</html>
+
+
